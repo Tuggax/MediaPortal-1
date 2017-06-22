@@ -102,6 +102,8 @@ namespace SetupTv
     [STAThread]
     public static void Main(string[] arguments)
     {
+      //Debugger.Break();
+
       // Initialize hosting environment
       IntegrationProviderHelper.Register(PathManager.BuildAssemblyRelativePath("Integration"));
 

@@ -716,7 +716,7 @@ namespace TvService
           break;
 
         case ScheduleRecordingType.EveryTimeOnEveryChannel:
-          isTimeToRecord = IsTimeToRecordEveryTimeOnEveryChannel(schedule);
+          isTimeToRecord = IsTimeToRecordEveryTimeOnEveryChannel(schedule, currentTime);
           break;
         case ScheduleRecordingType.WeeklyEveryTimeOnThisChannel:
           isTimeToRecord = IsTimeToRecordWeeklyEveryTimeOnThisChannel(schedule, currentTime);
@@ -728,25 +728,29 @@ namespace TvService
     private bool IsTimeToRecordWeeklyEveryTimeOnThisChannel(Schedule schedule, DateTime currentTime)
     {
       bool isTimeToRecord = false;
-      TvDatabase.Program current =
+
+      if (schedule.IsInsideSeriesStartRange(currentTime))
+      {
+        TvDatabase.Program current =
         schedule.ReferencedChannel().GetProgramAt(currentTime.AddMinutes(schedule.PreRecordInterval),
                                                   schedule.ProgramName);
 
-      if (current != null)
-      {
-        // (currentTime.DayOfWeek == schedule.StartTime.DayOfWeek)
-        // Log.Debug("Scheduler.cs WeeklyEveryTimeOnThisChannel: {0} {1} current.StartTime.DayOfWeek == schedule.StartTime.DayOfWeek {2} == {3}", schedule.ProgramName, schedule.ReferencedChannel().Name, current.StartTime.DayOfWeek, schedule.StartTime.DayOfWeek);
-        if (current.StartTime.DayOfWeek == schedule.StartTime.DayOfWeek)
+        if (current != null)
         {
-          if (currentTime >= current.StartTime.AddMinutes(-schedule.PreRecordInterval) &&
-              currentTime <= current.EndTime.AddMinutes(schedule.PostRecordInterval))
+          // (currentTime.DayOfWeek == schedule.StartTime.DayOfWeek)
+          // Log.Debug("Scheduler.cs WeeklyEveryTimeOnThisChannel: {0} {1} current.StartTime.DayOfWeek == schedule.StartTime.DayOfWeek {2} == {3}", schedule.ProgramName, schedule.ReferencedChannel().Name, current.StartTime.DayOfWeek, schedule.StartTime.DayOfWeek);
+          if (current.StartTime.DayOfWeek == schedule.StartTime.DayOfWeek)
           {
-            if (!schedule.IsSerieIsCanceled(current.StartTime))
+            if (currentTime >= current.StartTime.AddMinutes(-schedule.PreRecordInterval) &&
+                currentTime <= current.EndTime.AddMinutes(schedule.PostRecordInterval))
             {
-              bool createSpawnedOnceSchedule = CreateSpawnedOnceSchedule(schedule, current);
-              if (createSpawnedOnceSchedule)
+              if (!schedule.IsSerieIsCanceled(current.StartTime))
               {
-                ResetTimer(); //lets process the spawned once schedule at once.
+                bool createSpawnedOnceSchedule = CreateSpawnedOnceSchedule(schedule, current);
+                if (createSpawnedOnceSchedule)
+                {
+                  ResetTimer(); //lets process the spawned once schedule at once.
+                }
               }
             }
           }
@@ -756,32 +760,36 @@ namespace TvService
       return isTimeToRecord;
     }
 
-    private bool IsTimeToRecordEveryTimeOnEveryChannel(Schedule schedule)
+    private bool IsTimeToRecordEveryTimeOnEveryChannel(Schedule schedule, DateTime currentTime)
     {
       bool isTimeToRecord = false;
-      bool createSpawnedOnceSchedule = false;
 
-      IList<TvDatabase.Program> programs = TvDatabase.Program.RetrieveCurrentRunningByTitle(schedule.ProgramName,
-                                                                                            schedule.PreRecordInterval,
-                                                                                            schedule.PostRecordInterval);
-      foreach (TvDatabase.Program program in programs)
+      if (schedule.IsInsideSeriesStartRange(currentTime))
       {
-        if (!schedule.IsSerieIsCanceled(program.StartTime))
+        bool createSpawnedOnceSchedule = false;
+
+        IList<TvDatabase.Program> programs = TvDatabase.Program.RetrieveCurrentRunningByTitle(schedule.ProgramName,
+                                                                                              schedule.PreRecordInterval,
+                                                                                              schedule.PostRecordInterval);
+        foreach (TvDatabase.Program program in programs)
         {
-          if (CreateSpawnedOnceSchedule(schedule, program))
+          if (!schedule.IsSerieIsCanceled(program.StartTime))
           {
-            Log.Debug("IsTimeToRecordEveryTimeOnEveryChannel: {0}, {1}", schedule.ProgramName, schedule.StartTime);
-            createSpawnedOnceSchedule = true;
+            if (CreateSpawnedOnceSchedule(schedule, program))
+            {
+              Log.Debug("IsTimeToRecordEveryTimeOnEveryChannel: {0}, {1}", schedule.ProgramName, schedule.StartTime);
+              createSpawnedOnceSchedule = true;
+            }
+          }
+          else
+          {
+            Log.Debug("IsTimeToRecordEveryTimeOnEveryChannel: Canceled: {0}, {1}", schedule.ProgramName, schedule.StartTime);
           }
         }
-        else
+        if (createSpawnedOnceSchedule)
         {
-          Log.Debug("IsTimeToRecordEveryTimeOnEveryChannel: Canceled: {0}, {1}", schedule.ProgramName, schedule.StartTime);
+          ResetTimer(); //lets process the spawned once schedule at once.
         }
-      }
-      if (createSpawnedOnceSchedule)
-      {
-        ResetTimer(); //lets process the spawned once schedule at once.
       }
       return isTimeToRecord;
     }
@@ -789,29 +797,33 @@ namespace TvService
     private bool IsTimeToRecordEveryTimeOnThisChannel(Schedule schedule, DateTime currentTime)
     {
       bool isTimeToRecord = false;
-      TvDatabase.Program current =
-        schedule.ReferencedChannel().GetProgramAt(currentTime.AddMinutes(schedule.PreRecordInterval),
-                                                  schedule.ProgramName);
 
-      if (current != null)
+      if (schedule.IsInsideSeriesStartRange(currentTime))
       {
-        if (currentTime >= current.StartTime.AddMinutes(-schedule.PreRecordInterval) &&
-            currentTime <= current.EndTime.AddMinutes(schedule.PostRecordInterval))
-        {
-          if (!schedule.IsSerieIsCanceled(current.StartTime))
+        TvDatabase.Program current =
+          schedule.ReferencedChannel().GetProgramAt(currentTime.AddMinutes(schedule.PreRecordInterval), 
+                                                    schedule.ProgramName);
+
+          if (current != null)
           {
-            bool createSpawnedOnceSchedule = CreateSpawnedOnceSchedule(schedule, current);
-            if (createSpawnedOnceSchedule)
+            if (currentTime >= current.StartTime.AddMinutes(-schedule.PreRecordInterval) &&
+                currentTime <= current.EndTime.AddMinutes(schedule.PostRecordInterval))
             {
-              Log.Debug("IsTimeToRecordEveryTimeOnThisChannel: {0}, {1}", schedule.ProgramName, schedule.StartTime);
-              ResetTimer(); //lets process the spawned once schedule at once.
+              if (!schedule.IsSerieIsCanceled(current.StartTime))
+              {
+                bool createSpawnedOnceSchedule = CreateSpawnedOnceSchedule(schedule, current);
+                if (createSpawnedOnceSchedule)
+                {
+                  Log.Debug("IsTimeToRecordEveryTimeOnThisChannel: {0}, {1}", schedule.ProgramName, schedule.StartTime);
+                  ResetTimer(); //lets process the spawned once schedule at once.
+                }
+              }
+              else
+              {
+                Log.Debug("IsTimeToRecordEveryTimeOnThisChannel: Canceled: {0}, {1}", schedule.ProgramName, schedule.StartTime);
+              }
             }
           }
-          else
-          {
-            Log.Debug("IsTimeToRecordEveryTimeOnThisChannel: Canceled: {0}, {1}", schedule.ProgramName, schedule.StartTime);
-          }
-        }
       }
 
       return isTimeToRecord;
@@ -931,7 +943,7 @@ namespace TvService
       }
       return newRecording;
     }
-
+    
     /// <summary>
     /// Starts recording the recording specified
     /// </summary>

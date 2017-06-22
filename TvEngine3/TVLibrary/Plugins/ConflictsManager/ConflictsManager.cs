@@ -628,8 +628,11 @@ namespace TvEngine
         ScheduleRecordingType scheduleType = (ScheduleRecordingType)schedule.ScheduleType;
         if (schedule.Canceled != Schedule.MinSchedule) continue;
         if (scheduleType != ScheduleRecordingType.EveryTimeOnEveryChannel) continue;
-        IList<Program> programsList = Program.RetrieveByTitleAndTimesInterval(schedule.ProgramName, schedule.StartTime,
-                                                                              schedule.StartTime.AddMonths(1));
+        IList<Program> programsList = 
+          schedule.ApplySeriesStartRangeFilter(
+            Program.RetrieveByTitleAndTimesInterval(schedule.ProgramName, schedule.StartTime, 
+                                                    schedule.StartTime.AddMonths(1)));
+
         foreach (Program program in programsList)
         {
           if ((program.Title == schedule.ProgramName) && (program.IdChannel == schedule.IdChannel) &&
@@ -663,8 +666,11 @@ namespace TvEngine
         if (schedule.Canceled != Schedule.MinSchedule) continue;
         if (scheduleType != ScheduleRecordingType.EveryTimeOnThisChannel) continue;
         Channel channel = Channel.Retrieve(schedule.IdChannel);
-        IList<Program> programsList = layer.SearchMinimalPrograms(DateTime.Now, DateTime.Now.AddMonths(1),
-                                                                  schedule.ProgramName, channel);
+        IList<Program> programsList =
+          schedule.ApplySeriesStartRangeFilter(
+            layer.SearchMinimalPrograms(DateTime.Now, DateTime.Now.AddMonths(1), 
+                                        schedule.ProgramName, channel));
+
         if (programsList != null)
         {
           foreach (Program program in programsList)
@@ -699,8 +705,10 @@ namespace TvEngine
         if (schedule.Canceled != Schedule.MinSchedule) continue;
         if (scheduleType != ScheduleRecordingType.WeeklyEveryTimeOnThisChannel) continue;
         Channel channel = Channel.Retrieve(schedule.IdChannel);
-        IList<Program> programsList = layer.SearchMinimalPrograms(DateTime.Now, DateTime.Now.AddMonths(1),
-                                                                  schedule.ProgramName, channel);
+        IList<Program> programsList =
+          schedule.ApplySeriesStartRangeFilter(
+            layer.SearchMinimalPrograms(DateTime.Now, DateTime.Now.AddMonths(1),
+                                        schedule.ProgramName, channel));
         if (programsList != null)
         {
           foreach (Program program in programsList)

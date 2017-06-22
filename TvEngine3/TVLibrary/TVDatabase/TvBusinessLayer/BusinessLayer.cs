@@ -2999,7 +2999,7 @@ namespace TvDatabase
       if (rec.ScheduleType == (int)ScheduleRecordingType.WeeklyEveryTimeOnThisChannel)
       {
         //Log.Debug("get {0} {1} EveryTimeOnThisChannel", rec.ProgramName, rec.ReferencedChannel().Name);
-        programs = layer.SearchMinimalPrograms(dtDay, dtDay.AddDays(days), rec.ProgramName, rec.ReferencedChannel());
+        programs = rec.ApplySeriesStartRangeFilter(layer.SearchMinimalPrograms(dtDay, dtDay.AddDays(days), rec.ProgramName, rec.ReferencedChannel()));
         foreach (Program prog in programs)
         {
           // dtDay.DayOfWeek == rec.StartTime.DayOfWeek
@@ -3024,10 +3024,12 @@ namespace TvDatabase
         return recordings;
       }
 
-      programs = rec.ScheduleType == (int)ScheduleRecordingType.EveryTimeOnThisChannel
+      programs = rec.ApplySeriesStartRangeFilter(
+                  rec.ScheduleType == (int)ScheduleRecordingType.EveryTimeOnThisChannel
                    ? layer.SearchMinimalPrograms(dtDay, dtDay.AddDays(days), rec.ProgramName,
                                                  rec.ReferencedChannel())
-                   : layer.SearchMinimalPrograms(dtDay, dtDay.AddDays(days), rec.ProgramName, null);
+                   : layer.SearchMinimalPrograms(dtDay, dtDay.AddDays(days), rec.ProgramName, null));
+
       foreach (Program prog in programs)
       {
         if (rec.IsRecordingProgram(prog, false))
