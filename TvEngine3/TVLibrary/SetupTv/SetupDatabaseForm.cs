@@ -24,6 +24,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
+using System.Data.SQLite;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -236,8 +237,9 @@ namespace SetupTv
         if (provider == ProviderType.Sqlite && string.IsNullOrEmpty(txtSqliteFileName.Text) ||
           provider != ProviderType.Sqlite && (string.IsNullOrEmpty(tbServerHostName.Text) || string.IsNullOrEmpty(tbPassword.Text)))
           return false;
-
-        string connectionString = ComposeConnectionString(tbServerHostName.Text, tbUserID.Text, tbPassword.Text, "", false, 15);
+        
+        string connectionString = ComposeConnectionString(provider == ProviderType.Sqlite ? txtSqliteFileName.Text : tbServerHostName.Text,
+                                                          tbUserID.Text, tbPassword.Text, "", false, 15);
 
         switch (provider)
         {
@@ -315,82 +317,19 @@ namespace SetupTv
         }
 
         // As the connection string sets the DB schema name we need to compose it after cleaning the statement.
-        string connectionString = ComposeConnectionString(tbServerHostName.Text, tbUserID.Text, tbPassword.Text, "",
-                                                          true, 30);
+        string connectionString = ComposeConnectionString(provider == ProviderType.Sqlite ? txtSqliteFileName.Text : tbServerHostName.Text,
+                                                          tbUserID.Text, tbPassword.Text, "", true, 30);
+
         switch (provider)
         {
           case ProviderType.SqlServer:
-            using (SqlConnection connect = new SqlConnection(connectionString))
-            {
-              connect.Open();
-              if (CommandScript != null)
-                foreach (string SingleStmt in CommandScript)
-                {
-                  string SqlStmt = SingleStmt.Trim();
-                  if (!string.IsNullOrEmpty(SqlStmt) && !SqlStmt.StartsWith("--") && !SqlStmt.StartsWith("/*"))
-                  {
-                    try
-                    {
-                      using (SqlCommand cmd = new SqlCommand(SqlStmt, connect))
-                      {
-                        Log.Write("  Exec SQL: {0}", SqlStmt);
-                        cmd.CommandTimeout = 60;    // extra long 60 second timeout needed for long-running upgrade statements
-                        cmd.ExecuteNonQuery();
-                      }
-                    }
-                    catch (SqlException ex)
-                    {
-                      Log.Write("  ********* SQL statement failed! *********");
-                      Log.Write("  ********* Error reason: {0}", ex.Message);
-                      Log.Write("  ********* Error code: {0}, Line: {1} *********", ex.Number.ToString(),
-                                ex.LineNumber.ToString());
-                      succeeded = false;
-                      if (connect.State != ConnectionState.Open)
-                      {
-                        Log.Write("  ********* Connection status = {0} - aborting further command execution..",
-                                  connect.State.ToString());
-                        break;
-                      }
-                    }
-                  }
-                }
-            }
+            succeeded = ExecuteNonQuery<SqlConnection, SqlCommand, SqlException>(c => new SqlConnection(c), (s, c) => new SqlCommand(s, c), connectionString, CommandScript);
             break;
           case ProviderType.MySql:
-            using (MySqlConnection connect = new MySqlConnection(connectionString))
-            {
-              connect.Open();
-              if (CommandScript != null)
-                foreach (string SingleStmt in CommandScript)
-                {
-                  string SqlStmt = SingleStmt.Trim();
-                  if (!string.IsNullOrEmpty(SqlStmt) && !SqlStmt.StartsWith("--") && !SqlStmt.StartsWith("/*"))
-                  {
-                    try
-                    {
-                      using (MySqlCommand cmd = new MySqlCommand(SqlStmt, connect))
-                      {
-                        Log.Write("  Exec SQL: {0}", SqlStmt);
-                        cmd.CommandTimeout = 60;    // extra long 60 second timeout needed for long-running upgrade statements
-                        cmd.ExecuteNonQuery();
-                      }
-                    }
-                    catch (MySqlException ex)
-                    {
-                      Log.Write("  ********* SQL statement failed! *********");
-                      Log.Write("  ********* Error reason: {0}", ex.Message);
-                      Log.Write("  ********* Error code: {0} *********", ex.Number.ToString());
-                      succeeded = false;
-                      if (connect.State != ConnectionState.Open)
-                      {
-                        Log.Write("  ********* Connection status = {0} - aborting further command execution..",
-                                  connect.State.ToString());
-                        break;
-                      }
-                    }
-                  }
-                }
-            }
+            succeeded = ExecuteNonQuery<MySqlConnection, MySqlCommand, MySqlException>(c => new MySqlConnection(c), (s, c) => new MySqlCommand(s, c), connectionString, CommandScript);
+            break;
+          case ProviderType.Sqlite:
+            succeeded = ExecuteNonQuery<SQLiteConnection, SQLiteCommand, SQLiteException>(c => new SQLiteConnection(c), (s, c) => new SQLiteCommand(s, c), connectionString, CommandScript);
             break;
         }
       }
@@ -400,6 +339,52 @@ namespace SetupTv
         succeeded = false;
       }
       SqlConnection.ClearAllPools();
+      return succeeded;
+    }
+
+    private bool ExecuteNonQuery<T1, T2, T3>(Func<string, T1> createConnection, Func<string, T1, T2> createCommand, string connectionString, string[] commandScript) 
+      where T1 : IDbConnection
+      where T2 : IDbCommand
+      where T3 : Exception
+    {
+      bool succeeded = true;
+
+      if (commandScript != null)
+      {
+        using (T1 connect = createConnection(connectionString))
+        {
+          connect.Open();
+
+          foreach (string SingleStmt in commandScript)
+          {
+            string SqlStmt = SingleStmt.Trim();
+            if (!string.IsNullOrEmpty(SqlStmt) && !SqlStmt.StartsWith("--") && !SqlStmt.StartsWith("/*"))
+            {
+              try
+              {
+                using (IDbCommand cmd = createCommand(SqlStmt, connect))
+                {
+                  Log.Write("  Exec SQL: {0}", SqlStmt);
+                  cmd.CommandTimeout = 60;    // extra long 60 second timeout needed for long-running upgrade statements
+                  cmd.ExecuteNonQuery();
+                }
+              }
+              catch (T3 ex)
+              {
+                Log.Write("  ********* SQL statement failed! *********");
+                Log.Write("  ********* Error reason: {0}", ex.Message);
+                succeeded = false;
+                if (connect.State != ConnectionState.Open)
+                {
+                  Log.Write("  ********* Connection status = {0} - aborting further command execution..", connect.State.ToString());
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+
       return succeeded;
     }
 

@@ -242,6 +242,7 @@ namespace SetupTv.Sections
       numericUpDownThumbRows.Value = Convert.ToInt32(layer.GetSetting("TVThumbnailsRows", "1").Value);
       trackBarQuality.Value = Convert.ToInt32(layer.GetSetting("TVThumbnailsQuality", "4").Value);
       numericUpDownTimeOffset.Value = Convert.ToInt32(layer.GetSetting("TVThumbnailsTimeOffset", "0").Value);
+      numericUpDownSeriesSchedules.Value = Convert.ToInt32(layer.GetSetting("seriesStartRangeOffset", "0").Value);
     }
 
     private static decimal ValueSanityCheck(int value, int min, int max)
@@ -337,7 +338,11 @@ namespace SetupTv.Sections
       setting = layer.GetSetting("TVThumbnailsTimeOffset", "1");
       setting.Value = numericUpDownTimeOffset.Value.ToString();
       setting.Persist();
-           
+
+      setting = layer.GetSetting("seriesStartRangeOffset", "0");
+      setting.Value = numericUpDownSeriesSchedules.Value.ToString();
+      setting.Persist();
+
     }
 
     #endregion
